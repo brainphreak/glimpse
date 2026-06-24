@@ -197,6 +197,7 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
   const switchPage = async (id: string) => {
     if (id === activePageId) return;
     setActivePageId(id);
+    try { localStorage.setItem("dashboard_active_page", id); } catch {}
     try {
       const res = await fetch(`/api/layout?id=${encodeURIComponent(id)}`);
       const data = await res.json();
@@ -208,11 +209,20 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
     }
   };
 
+  // On load, restore the last-viewed tab (server always renders the default page first).
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("dashboard_active_page"); } catch {}
+    if (saved && saved !== activePageId && initialPages.some((p) => p.id === saved)) switchPage(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const addTab = async () => {
     const res = await fetch("/api/pages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "New Tab" }) });
     const page = await res.json();
     setPages((p) => [...p, page]);
     setActivePageId(page.id);
+    try { localStorage.setItem("dashboard_active_page", page.id); } catch {}
     setWidgets([]);
     setLayouts({ lg: [] });
   };
@@ -230,6 +240,7 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
     const remaining = pages.filter((p) => p.id !== id);
     setPages(remaining);
     await fetch(`/api/pages?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    try { if (localStorage.getItem("dashboard_active_page") === id) localStorage.removeItem("dashboard_active_page"); } catch {}
     if (activePageId === id) switchPage(remaining[0].id);
   };
 

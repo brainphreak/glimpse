@@ -4,6 +4,8 @@ A self-hosted personal dashboard with **drag-and-drop widgets**, **built-in AI**
 
 Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically on **Linux, macOS, and Windows** via Docker.
 
+![Glimpse dashboard](docs/images/glimpse-1-dashboard.png)
+
 ---
 
 ## Highlights
@@ -47,6 +49,33 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 | **Server Monitor** | HTTP health checks + one-click SSH command copy |
 | **Terminal** | Real server-side shell over WebSocket (bash/zsh/PowerShell or the `claude` CLI); persistent + auto-reconnecting |
 | **Custom HTML / Image / Iframe** | Render arbitrary HTML, an image/GIF, or embed any site |
+
+---
+
+## Screenshots
+
+**Build any layout across multiple tabs** — here an AI workspace and a news feed:
+
+| AI workspace | News feed |
+|---|---|
+| ![AI workspace tab](docs/images/glimpse-2-dashboard.png) | ![News feed tab](docs/images/glimpse-3-dashboard.png) |
+
+**Add widgets** from the picker, and tune everything in **Settings**:
+
+| Add widget | Settings — appearance/general/setup |
+|---|---|
+| ![Add widget menu](docs/images/glimpse-4-widgets-menu.png) | ![Settings](docs/images/glimpse-5-settings1.png) |
+| ![Settings](docs/images/glimpse-6-settings2.png) | ![Settings — API keys & integrations](docs/images/glimpse-7-settings3.png) |
+
+**AI everywhere** — pick a provider/model per widget (Claude API, Claude subscription, or local Ollama), and configure the Daily Briefing:
+
+| Model picker | Daily Briefing settings |
+|---|---|
+| ![AI model picker](docs/images/glimpse-8-ai-pick-models.png) | ![Daily Briefing settings](docs/images/glimpse-9-ai-daily-briefing-settings.png) |
+
+Widget headers can be shown for quick access to each widget's controls:
+
+![Widget headers](docs/images/glimpse-10-show-widget-headers.png)
 
 ---
 

@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+out
+*.md
+.env*
+*.db
+*.db-wal
+*.db-shm
+.DS_Store

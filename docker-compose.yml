@@ -1,0 +1,29 @@
+# Glimpse — self-hosted dashboard. Same image runs identically on Linux, macOS, Windows.
+#   Configure:  cp .env.local.example .env.local   (then edit)
+#   Run:        docker compose up -d --build
+#   Logs:       docker compose logs -f
+#   Stop:       docker compose down
+services:
+  dashboard:
+    build: .
+    container_name: glimpse
+    restart: unless-stopped          # always-on; survives reboots
+    ports:
+      - "3000:3000"                  # browse at http://localhost:3000
+    volumes:
+      - glimpse_data:/data           # SQLite DB + persistent state
+      # Optional: enable the "Claude · subscription (CLI)" provider by mounting the
+      # host's Claude Code credentials. Only do this on a DEDICATED host (not a machine
+      # actively running Claude Code, or the credential files are shared live).
+      #   - ${HOME}/.claude:/root/.claude
+      #   - ${HOME}/.claude.json:/root/.claude.json
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/dashboard.db
+      - AUTH_TRUST_HOST=true
+      # - DISABLE_AUTH=1             # uncomment for open access (no Google sign-in)
+
+volumes:
+  glimpse_data:

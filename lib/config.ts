@@ -10,6 +10,8 @@ const ENV_MAP: Record<string, string> = {
   anthropic_api_key:      "ANTHROPIC_API_KEY",
   ollama_url:             "OLLAMA_URL",
   github_token:           "GITHUB_TOKEN",
+  reddit_client_id:       "REDDIT_CLIENT_ID",
+  reddit_client_secret:   "REDDIT_CLIENT_SECRET",
   n8n_url:                "N8N_URL",
   n8n_api_key:            "N8N_API_KEY",
   dashboard_title:        "DASHBOARD_TITLE",
@@ -25,6 +27,7 @@ export const SECRET_KEYS = new Set([
   "openweathermap_api_key",
   "anthropic_api_key",
   "github_token",
+  "reddit_client_secret",
   "n8n_api_key",
 ]);
 

@@ -7,24 +7,39 @@ import {
   streamChat, type ModelOption,
 } from "@/lib/ai";
 
-type SourceKind = "rss" | "reddit";
-interface DigestConfig { model?: string; source?: SourceKind; rssUrl?: string; subreddit?: string; lastText?: string; lastAt?: number }
+interface DigestConfig {
+  model?: string;
+  rssUrls?: string[];      // selected RSS + News feed URLs
+  subreddits?: string[];   // selected subreddits
+  lastText?: string; lastAt?: number;
+  // legacy (single-source) — migrated on first interaction:
+  source?: "rss" | "reddit"; rssUrl?: string; subreddit?: string;
+}
 
 interface RssItem { title: string; contentSnippet?: string }
 interface RedditPost { title: string; score: number; numComments: number; selftext?: string }
+interface Discovered { rss: { url: string; title: string }[]; news: { url: string; title: string }[]; reddit: { subreddit: string }[] }
+
+function hostOf(url: string) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } }
 
 export default function FeedDigestWidget({ config, onConfigChange }: { config: DigestConfig; onConfigChange?: (c: Record<string, unknown>) => void }) {
-  const source: SourceKind = config.source || "rss";
+  // Selections (with migration from the old single-feed config shape).
+  const selectedRss = config.rssUrls ?? (config.rssUrl ? [config.rssUrl] : []);
+  const selectedSubs = config.subreddits ?? (config.subreddit ? [config.subreddit] : []);
+
   const [models, setModels] = useState<ModelOption[]>([]);
   const [model, setModel] = useState(config.model || DEFAULT_CLAUDE_MODEL);
   const [text, setText] = useState(config.lastText || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [feeds, setFeeds] = useState<{ rss: { url: string; title: string }[]; reddit: { subreddit: string }[] }>({ rss: [], reddit: [] });
+  const [disc, setDisc] = useState<Discovered>({ rss: [], news: [], reddit: [] });
+  const [manualFeed, setManualFeed] = useState("");
+  const [manualSub, setManualSub] = useState("");
   const ollamaUrl = useRef("");
 
-  // Carry the persisted result through every patch so changing settings doesn't wipe the saved digest.
-  const patch = (p: DigestConfig) => onConfigChange?.({ model, source, rssUrl: config.rssUrl, subreddit: config.subreddit, lastText: config.lastText, lastAt: config.lastAt, ...p });
+  // Always carry selections + persisted result through every patch.
+  const patch = (p: DigestConfig) =>
+    onConfigChange?.({ model, rssUrls: selectedRss, subreddits: selectedSubs, lastText: config.lastText, lastAt: config.lastAt, ...p });
 
   useEffect(() => {
     (async () => {
@@ -32,38 +47,62 @@ export default function FeedDigestWidget({ config, onConfigChange }: { config: D
       ollamaUrl.current = url;
       setModels(all);
       if (all.length && !all.some((m) => m.id === (config.model || model))) setModel(all[0].id);
-      fetch("/api/feeds").then((r) => r.json()).then(setFeeds).catch(() => {});
+      fetch("/api/feeds").then((r) => r.json()).then((j) => setDisc({ rss: j.rss || [], news: j.news || [], reddit: j.reddit || [] })).catch(() => {});
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const gather = useCallback(async (): Promise<{ label: string; body: string } | null> => {
-    if (source === "rss") {
-      if (!config.rssUrl) return null;
-      const j = await fetch(`/api/rss?url=${encodeURIComponent(config.rssUrl)}`, { cache: "no-store" }).then((r) => r.json());
-      if (j.error) throw new Error(j.error);
-      const items = (j.items as RssItem[] || []).slice(0, 15);
-      if (!items.length) return null;
-      return { label: j.title || "feed", body: items.map((i, n) => `${n + 1}. ${i.title}${i.contentSnippet ? ` — ${i.contentSnippet.slice(0, 140)}` : ""}`).join("\n") };
-    } else {
-      const sub = config.subreddit || "all";
-      const j = await fetch(`/api/reddit?subreddit=${encodeURIComponent(sub)}&sort=top&limit=20`, { cache: "no-store" }).then((r) => r.json());
-      if (j.error) throw new Error(j.error);
-      const posts = (j.posts as RedditPost[] || []).slice(0, 15);
-      if (!posts.length) return null;
-      return { label: `r/${sub}`, body: posts.map((p, n) => `${n + 1}. [${p.score}⬆ ${p.numComments}💬] ${p.title}${p.selftext ? ` — ${p.selftext.slice(0, 120)}` : ""}`).join("\n") };
-    }
-  }, [source, config.rssUrl, config.subreddit]);
+  // Known feeds = discovered RSS + News (deduped) ∪ anything already selected manually.
+  const knownFeeds = (() => {
+    const map = new Map<string, string>();
+    for (const f of [...disc.rss, ...disc.news]) if (!map.has(f.url)) map.set(f.url, f.title);
+    for (const u of selectedRss) if (!map.has(u)) map.set(u, hostOf(u));
+    return Array.from(map, ([url, title]) => ({ url, title }));
+  })();
+  const knownSubs = (() => {
+    const set = new Set<string>(disc.reddit.map((r) => r.subreddit));
+    for (const s of selectedSubs) set.add(s);
+    return Array.from(set);
+  })();
+
+  const toggleFeed = (url: string) =>
+    patch({ rssUrls: selectedRss.includes(url) ? selectedRss.filter((u) => u !== url) : [...selectedRss, url] });
+  const toggleSub = (sub: string) =>
+    patch({ subreddits: selectedSubs.includes(sub) ? selectedSubs.filter((s) => s !== sub) : [...selectedSubs, sub] });
+
+  const gather = useCallback(async (): Promise<{ sources: number; body: string } | null> => {
+    const parts: string[] = [];
+    await Promise.all([
+      ...selectedRss.map(async (url) => {
+        try {
+          const j = await fetch(`/api/rss?url=${encodeURIComponent(url)}`, { cache: "no-store" }).then((r) => r.json());
+          const items = (j.items as RssItem[] || []).slice(0, 8);
+          if (items.length) parts.push(`## ${j.title || hostOf(url)}\n` + items.map((i) => `- ${i.title}${i.contentSnippet ? ` — ${i.contentSnippet.slice(0, 120)}` : ""}`).join("\n"));
+        } catch { /* skip this feed */ }
+      }),
+      ...selectedSubs.map(async (sub) => {
+        try {
+          const j = await fetch(`/api/reddit?subreddit=${encodeURIComponent(sub)}&sort=top&limit=12`, { cache: "no-store" }).then((r) => r.json());
+          const posts = (j.posts as RedditPost[] || []).slice(0, 8);
+          if (posts.length) parts.push(`## r/${sub}\n` + posts.map((p) => `- [${p.score}⬆] ${p.title}`).join("\n"));
+        } catch { /* skip this sub */ }
+      }),
+    ]);
+    if (!parts.length) return null;
+    return { sources: selectedRss.length + selectedSubs.length, body: parts.join("\n\n") };
+  }, [selectedRss, selectedSubs]);
 
   const generate = useCallback(async () => {
     if (loading) return;
     setLoading(true); setError(""); setText("");
     try {
+      if (!selectedRss.length && !selectedSubs.length) { setError("Pick some feeds in settings (gear)."); setLoading(false); return; }
       const data = await gather();
-      if (!data) { setError(source === "rss" ? "Add a feed URL in settings." : "Add a subreddit in settings."); setLoading(false); return; }
+      if (!data) { setError("No items fetched. Check the feeds / Reddit credentials."); setLoading(false); return; }
       const system =
-        "You are a news editor. Summarize the following feed items into a tight digest of 3-5 bullet points " +
-        "grouping related stories and highlighting what's most important or interesting. Plain text, one bullet per line starting with '•'. No preamble.";
+        "You are a news editor. The following are headlines grouped by source (## headers). " +
+        "Write a single tight digest of 4-7 bullet points across ALL sources, grouping related stories and surfacing what's most important or interesting. " +
+        "Plain text, one bullet per line starting with '•'. No preamble, no per-source headers.";
       let acc = "";
       await streamChat(
         {
@@ -71,20 +110,29 @@ export default function FeedDigestWidget({ config, onConfigChange }: { config: D
           provider: models.find((m) => m.id === model)?.provider,
           system,
           ollamaUrl: ollamaUrl.current,
-          messages: [{ role: "user", content: `Digest of ${data.label}:\n\n${data.body}` }],
+          messages: [{ role: "user", content: `Sources (${data.sources}):\n\n${data.body}` }],
         },
         (t) => { acc += t; setText((prev) => prev + t); }
       );
-      // Persist the digest so it survives tab switches / reloads.
-      onConfigChange?.({ model, source, rssUrl: config.rssUrl, subreddit: config.subreddit, lastText: acc, lastAt: Date.now() });
+      onConfigChange?.({ model, rssUrls: selectedRss, subreddits: selectedSubs, lastText: acc, lastAt: Date.now() });
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       setLoading(false);
     }
-  }, [gather, loading, model, models, source, config.rssUrl, config.subreddit, onConfigChange]);
+  }, [gather, loading, model, models, selectedRss, selectedSubs, onConfigChange]);
 
   useWidgetRefresh(() => generate());
+
+  const allFeedsSelected = knownFeeds.length > 0 && knownFeeds.every((f) => selectedRss.includes(f.url));
+  const allSubsSelected = knownSubs.length > 0 && knownSubs.every((s) => selectedSubs.includes(s));
+
+  const checkRow = (label: string, checked: boolean, onToggle: () => void) => (
+    <label key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-secondary)", padding: "2px 0", cursor: "pointer" }}>
+      <input type="checkbox" checked={checked} onChange={onToggle} style={{ flexShrink: 0 }} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </label>
+  );
 
   useWidgetSettings(
     <>
@@ -95,45 +143,40 @@ export default function FeedDigestWidget({ config, onConfigChange }: { config: D
           {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
       </div>
+
       <div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Source</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {(["rss", "reddit"] as SourceKind[]).map((s) => (
-            <button key={s} onClick={() => patch({ source: s })} style={{ flex: 1, fontSize: 11, padding: "4px 0", borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer", textTransform: "capitalize", background: source === s ? "var(--accent)" : "transparent", color: source === s ? "#fff" : "var(--text-secondary)" }}>{s}</button>
-          ))}
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>RSS &amp; News feeds</div>
+        {knownFeeds.length > 0 && checkRow(
+          allFeedsSelected ? "Deselect all" : "Select all",
+          allFeedsSelected,
+          () => patch({ rssUrls: allFeedsSelected ? [] : knownFeeds.map((f) => f.url) })
+        )}
+        {knownFeeds.map((f) => checkRow(f.title, selectedRss.includes(f.url), () => toggleFeed(f.url)))}
+        {knownFeeds.length === 0 && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>No RSS/News widgets found — add a feed below.</div>}
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input value={manualFeed} onChange={(e) => setManualFeed(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const u = manualFeed.trim(); if (u && !selectedRss.includes(u)) { patch({ rssUrls: [...selectedRss, u] }); setManualFeed(""); } } }} placeholder="https://site.com/feed.xml" style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }} />
+          <button onClick={() => { const u = manualFeed.trim(); if (u && !selectedRss.includes(u)) { patch({ rssUrls: [...selectedRss, u] }); setManualFeed(""); } }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Add</button>
         </div>
       </div>
-      {source === "rss" ? (
-        <div>
-          {feeds.rss.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>From an RSS widget on your dashboard</div>
-              <select value={feeds.rss.some((f) => f.url === config.rssUrl) ? config.rssUrl : ""} onChange={(e) => { if (e.target.value) patch({ rssUrl: e.target.value }); }} style={{ width: "100%", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }}>
-                <option value="">— pick a feed —</option>
-                {feeds.rss.map((f) => <option key={f.url} value={f.url}>{f.title}</option>)}
-              </select>
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{feeds.rss.length > 0 ? "…or enter a URL" : "Feed URL"}</div>
-          <input value={config.rssUrl || ""} onChange={(e) => patch({ rssUrl: e.target.value })} placeholder="https://example.com/feed.xml" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subreddits</div>
+        {knownSubs.length > 0 && checkRow(
+          allSubsSelected ? "Deselect all" : "Select all",
+          allSubsSelected,
+          () => patch({ subreddits: allSubsSelected ? [] : knownSubs })
+        )}
+        {knownSubs.map((s) => checkRow(`r/${s}`, selectedSubs.includes(s), () => toggleSub(s)))}
+        {knownSubs.length === 0 && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>No Reddit widgets found — add one below.</div>}
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input value={manualSub} onChange={(e) => setManualSub(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const s = manualSub.trim().replace(/^r\//, ""); if (s && !selectedSubs.includes(s)) { patch({ subreddits: [...selectedSubs, s] }); setManualSub(""); } } }} placeholder="technology" style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }} />
+          <button onClick={() => { const s = manualSub.trim().replace(/^r\//, ""); if (s && !selectedSubs.includes(s)) { patch({ subreddits: [...selectedSubs, s] }); setManualSub(""); } }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Add</button>
         </div>
-      ) : (
-        <div>
-          {feeds.reddit.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>From a Reddit widget on your dashboard</div>
-              <select value={feeds.reddit.some((f) => f.subreddit === config.subreddit) ? config.subreddit : ""} onChange={(e) => { if (e.target.value) patch({ subreddit: e.target.value }); }} style={{ width: "100%", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }}>
-                <option value="">— pick a subreddit —</option>
-                {feeds.reddit.map((f) => <option key={f.subreddit} value={f.subreddit}>r/{f.subreddit}</option>)}
-              </select>
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{feeds.reddit.length > 0 ? "…or enter a subreddit" : "Subreddit"}</div>
-          <input value={config.subreddit || ""} onChange={(e) => patch({ subreddit: e.target.value.replace(/^r\//, "") })} placeholder="technology" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-base)", color: "var(--text-primary)", outline: "none" }} />
-        </div>
-      )}
+      </div>
     </>
   );
+
+  const nSel = selectedRss.length + selectedSubs.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 8 }}>
@@ -141,7 +184,7 @@ export default function FeedDigestWidget({ config, onConfigChange }: { config: D
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--text-muted)" }}>
           <Newspaper size={22} color="var(--accent)" />
           <button onClick={generate} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "8px 16px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>
-            <Newspaper size={13} /> Summarize feed
+            <Newspaper size={13} /> Summarize {nSel > 0 ? `${nSel} source${nSel > 1 ? "s" : ""}` : "feeds"}
           </button>
           {error && <div style={{ fontSize: 11, color: "var(--danger)", maxWidth: 280, textAlign: "center" }}>{error}</div>}
         </div>

@@ -16,11 +16,13 @@ interface CalEvent { summary?: string; start?: { dateTime?: string; date?: strin
 interface GmailMsg { subject: string; from: string; unread: boolean; snippet: string }
 interface RssItem { title: string; contentSnippet?: string }
 
-function isToday(iso?: string) {
-  if (!iso) return false;
+// Human label for an event start, including the weekday so the model can tell today vs tomorrow.
+function whenLabel(e: CalEvent): string {
+  const iso = e.start?.dateTime || e.start?.date;
+  if (!iso) return "";
   const d = new Date(iso);
-  const n = new Date();
-  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  if (e.start?.dateTime) return d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString([], { weekday: "short" }) + " (all day)";
 }
 
 export default function DailyBriefingWidget({ config, onConfigChange }: { config: BriefingConfig; onConfigChange?: (c: Record<string, unknown>) => void }) {
@@ -51,13 +53,15 @@ export default function DailyBriefingWidget({ config, onConfigChange }: { config
     if (sources.calendar) {
       try {
         const j = await fetch("/api/calendar", { cache: "no-store" }).then((r) => r.json());
-        const today = (j.events as CalEvent[] || []).filter((e) => isToday(e.start?.dateTime || e.start?.date));
-        if (today.length) {
-          parts.push("TODAY'S CALENDAR:\n" + today.map((e) => {
-            const t = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "All day";
-            return `- ${t}: ${e.summary || "(untitled)"}`;
-          }).join("\n"));
-        } else parts.push("TODAY'S CALENDAR: nothing scheduled.");
+        // Events from now through the next ~48h (covers today's remaining + tomorrow).
+        const horizon = Date.now() + 48 * 3600 * 1000;
+        const upcoming = (j.events as CalEvent[] || []).filter((e) => {
+          const iso = e.start?.dateTime || e.start?.date;
+          return iso && new Date(iso).getTime() <= horizon;
+        }).slice(0, 12);
+        if (upcoming.length) {
+          parts.push("UPCOMING CALENDAR (next 2 days):\n" + upcoming.map((e) => `- ${whenLabel(e)}: ${e.summary || "(untitled)"}`).join("\n"));
+        } else parts.push("UPCOMING CALENDAR: no events in the next 2 days.");
       } catch { /* skip */ }
     }
     if (sources.gmail) {
@@ -87,9 +91,10 @@ export default function DailyBriefingWidget({ config, onConfigChange }: { config
       if (!context.trim()) { setError("No data available. Enable sources in settings and sign in for Calendar/Gmail."); setLoading(false); return; }
       const now = new Date();
       const system =
-        "You are a concise personal assistant writing a morning briefing. " +
-        "Given the user's calendar, email and headlines, write a short, friendly summary (max 6 lines). " +
-        "Lead with what matters most today. Use plain text, no markdown headers. Be specific and brief.";
+        "You are a concise personal assistant writing a briefing. " +
+        "Base every statement ONLY on the data provided below — never invent events, emails, or claim a schedule/inbox is empty or 'wide open' unless the data explicitly shows nothing for that period. " +
+        "If calendar events are listed, mention the notable ones with their day and time. " +
+        "Write a short, friendly summary (max 6 lines), leading with what matters most. Plain text, no markdown headers. Be specific and brief.";
       let acc = "";
       await streamChat(
         {

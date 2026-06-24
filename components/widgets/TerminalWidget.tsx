@@ -12,6 +12,9 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
   const termInstance = useRef<unknown>(null);
   const fitAddon = useRef<unknown>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryRef = useRef(0);
+  const connectRef = useRef<(command: string, sessionName?: string, isRetry?: boolean) => void>(() => {});
   const [connected, setConnected] = useState(false);
   const [cmd, setCmd] = useState(config.cmd || "claude");
   const [fullscreen, setFullscreen] = useState(config.fullscreen ?? false);
@@ -24,19 +27,24 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
     });
   };
 
-  const disconnect = useCallback(() => {
-    wsRef.current?.close();
+  // Tear down the current socket without triggering auto-reconnect (handler is nulled first).
+  const teardown = () => {
+    if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+    const w = wsRef.current;
     wsRef.current = null;
+    if (w) { w.onclose = null; w.onerror = null; try { w.close(); } catch {} }
+  };
+
+  const disconnect = useCallback(() => {
+    teardown();
     setConnected(false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (termInstance.current as any)?.write("\r\n\x1b[33m[detached — session still running on server]\x1b[0m\r\n");
   }, []);
 
-  const connect = useCallback(async (command: string, sessionName?: string) => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+  const connect = useCallback(async (command: string, sessionName?: string, isRetry = false) => {
+    if (!isRetry) retryRef.current = 0;       // user-initiated connect resets the backoff counter
+    teardown();                                // drop any prior socket (no auto-reconnect on intentional close)
 
     const { Terminal } = await import("@xterm/xterm");
     const { FitAddon } = await import("@xterm/addon-fit");
@@ -117,15 +125,25 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
 
     ws.onopen = () => {
       setConnected(true);
+      retryRef.current = 0;     // a successful connect resets the backoff
       ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
     };
 
     ws.onmessage = (e) => term.write(e.data);
 
+    // Unexpected close (process exited or connection dropped) → auto-reconnect with backoff.
+    // Reconnecting reattaches to the server-side session if it's still alive, or starts fresh.
     ws.onclose = () => {
       setConnected(false);
-      term.write("\r\n\x1b[31m[session ended]\x1b[0m\r\n");
       ro.disconnect();
+      const attempt = retryRef.current++;
+      if (attempt < 12) {
+        const delay = Math.min(3000, Math.round(500 * Math.pow(1.6, attempt)));
+        term.write("\r\n\x1b[90m[reconnecting…]\x1b[0m\r\n");
+        reconnectTimer.current = setTimeout(() => connectRef.current(command, session, true), delay);
+      } else {
+        term.write("\r\n\x1b[31m[session ended — press the power button to reconnect]\x1b[0m\r\n");
+      }
     };
 
     ws.onerror = () => term.write("\r\n\x1b[31m[connection error]\x1b[0m\r\n");
@@ -139,6 +157,8 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
     });
   }, []);
 
+  connectRef.current = connect;
+
   const newSession = useCallback(async (command: string) => {
     // Kill the existing tmux session on the server, then reconnect (starts fresh)
     try {
@@ -149,7 +169,7 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
 
   useEffect(() => {
     connect(cmd);
-    return () => { wsRef.current?.close(); };
+    return () => { teardown(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

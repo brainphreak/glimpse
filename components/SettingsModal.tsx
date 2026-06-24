@@ -304,6 +304,21 @@ function SetupTab() {
             onSave={(v) => save("github_token", v)}
           />
 
+          {sectionHead("Reddit widget (optional)", "Reddit now requires an app. Create one at reddit.com/prefs/apps (type: script or web app).")}
+          <PlainField
+            label="Reddit Client ID"
+            desc="The short string under the app name"
+            value={typeof cfg.reddit_client_id === "string" ? cfg.reddit_client_id : ""}
+            onSave={(v) => save("reddit_client_id", v)}
+            placeholder="Ab3xYz..."
+          />
+          <SecretField
+            label="Reddit Client Secret"
+            desc="The 'secret' value from your Reddit app"
+            isSet={!!cfg.reddit_client_secret}
+            onSave={(v) => save("reddit_client_secret", v)}
+          />
+
           {sectionHead("n8n (optional)", "Only needed if you use n8n webhooks in Server Monitor")}
           <PlainField
             label="n8n URL"

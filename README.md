@@ -10,11 +10,11 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 
 - **Drag-and-drop grid** — resize and rearrange any widget; multiple tabbed dashboards, each with its own layout
 - **AI, three ways** — chat/summaries powered by the **Anthropic API**, your **Claude subscription** (via the bundled `claude` CLI — no API bill), or **local Ollama** models. Pick per widget.
-- **AI widgets** — streaming AI Chat (web search + image/vision), Daily Briefing (summarises your calendar + email + headlines), Feed Digest (summarises an RSS feed or subreddit), and a terminal-styled AI REPL
+- **AI widgets** — streaming AI Chat (web search + image/vision), Daily Briefing (summarises your next 2 days of calendar + unread email + headlines), Feed Digest (multi-source — summarises any mix of your RSS, News, and Reddit feeds at once), and a terminal-styled AI REPL
 - **20+ widgets** — clock, weather, calendar, Gmail, notes, links, news (image cards), RSS, Reddit, stocks, crypto, GitHub, Docker, system health, world clocks, server monitor, read-later, terminal, custom HTML/image/iframe
 - **In-browser setup** — API keys, OAuth, and integrations are configured from **Settings → Setup**; stored in SQLite, no restart needed
 - **Themes** — Default, Light, Matrix, Neon, Retro, Gameboy, Midnight, Dracula + full per-colour customisation
-- **Persistent terminal** — a real cross-platform shell (bash/zsh/PowerShell) over WebSocket, plus the `claude` CLI
+- **Persistent terminal** — a real cross-platform shell (bash/zsh/PowerShell) over WebSocket, plus the `claude` CLI; sessions survive disconnects and **auto-reconnect**
 - **Backup** — export/import all pages, widgets, notes, links, and servers as JSON
 - **Always-on** — `restart: unless-stopped`; survives reboots
 
@@ -26,7 +26,7 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 |---|---|
 | **AI Chat** | Streaming chat across Claude (API), Claude (subscription/CLI), and local Ollama models; web search + image input (vision) |
 | **Daily Briefing** | AI summary of today's calendar, unread email, and headlines |
-| **Feed Digest** | AI summary of an RSS feed or subreddit (pick from feeds you already have) |
+| **Feed Digest** | AI summary across multiple sources at once — tick any of your RSS / News feeds and subreddits (or all of them) |
 | **AI Terminal** | Terminal-styled AI chat REPL (Claude or Ollama) |
 | **Clock** | Live clock with optional date, timezone, label, colour |
 | **World Clocks** | Time across multiple time zones |
@@ -38,14 +38,14 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 | **Read Later** | Quick-save links to read later (per browser) |
 | **News** | Headline cards with thumbnails, merged from one or more RSS feeds |
 | **RSS Feed** | Any RSS/Atom feed |
-| **Reddit** | Posts from any subreddit |
+| **Reddit** | Posts from any subreddit (requires a free Reddit app — see Reddit setup below) |
 | **Crypto Ticker** | Live crypto prices (CoinGecko) |
 | **Stock Ticker** | Live stock / ETF / index / crypto prices with day change (Yahoo Finance, no key) |
 | **GitHub** | Your notifications and open pull requests |
 | **Docker** | Container status on the host |
 | **System Health** | CPU load, memory, and uptime |
 | **Server Monitor** | HTTP health checks + one-click SSH command copy |
-| **Terminal** | Real server-side shell over WebSocket (bash/zsh/PowerShell or the `claude` CLI) |
+| **Terminal** | Real server-side shell over WebSocket (bash/zsh/PowerShell or the `claude` CLI); persistent + auto-reconnecting |
 | **Custom HTML / Image / Iframe** | Render arbitrary HTML, an image/GIF, or embed any site |
 
 ---
@@ -53,7 +53,7 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 ## Quick start (Docker — recommended)
 
 ```bash
-git clone https://github.com/yourname/glimpse.git
+git clone https://github.com/brainphreak/glimpse.git
 cd glimpse
 cp .env.local.example .env.local      # set NEXTAUTH_SECRET + NEXTAUTH_URL at minimum
 docker compose up -d --build
@@ -115,6 +115,7 @@ Most settings live in **Settings → Setup** (stored in SQLite, applied immediat
 | `ANTHROPIC_API_KEY` | Claude (API) provider |
 | `OLLAMA_URL` | Ollama endpoint the browser calls (default `http://localhost:11434`) |
 | `GITHUB_TOKEN` | GitHub widget (notifications + PRs) |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | Reddit widget + Reddit feeds in Feed Digest (see Reddit setup below) |
 | `OPENWEATHERMAP_API_KEY` / `WEATHER_CITY` | Weather (optional; wttr.in used if no key) |
 | `N8N_URL` / `N8N_API_KEY` | n8n integration (optional) |
 
@@ -126,6 +127,16 @@ Most settings live in **Settings → Setup** (stored in SQLite, applied immediat
 4. Paste the Client ID & Secret into **Settings → Setup** (or set the env vars)
 
 > `NEXTAUTH_URL` and the redirect URI must match the host you actually open. For LAN access add `http://<lan-ip>:3000/api/auth/callback/google` too.
+
+### Reddit (for the Reddit widget + Reddit feeds in Feed Digest)
+
+Reddit blocks anonymous access, so the widget authenticates with a free Reddit app:
+
+1. Go to [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) → **create another app…**
+2. Type: **script** (or **web app**) — both give you a secret. Redirect URI can be `http://localhost:3000` (unused). The "about"/source URL is optional.
+3. Copy the **client ID** (under the app name) and the **secret** into **Settings → Setup → Reddit**.
+
+> Reddit may require accepting their Responsible Builder Policy and a verified email before app creation, and newly-created apps can take a short while to be approved.
 
 ---
 

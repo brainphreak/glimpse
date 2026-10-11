@@ -35,7 +35,8 @@ import TerminalWidget from "./widgets/TerminalWidget";
 import HtmlWidget from "./widgets/HtmlWidget";
 import ImageWidget from "./widgets/ImageWidget";
 import IframeWidget from "./widgets/IframeWidget";
-import { Plus, LogIn, LogOut, User, Settings, X } from "lucide-react";
+import { Plus, LogIn, LogOut, User, Settings, X, Eye, EyeOff } from "lucide-react";
+import { PrivacyProvider, maskEmails } from "@/lib/privacy";
 
 interface WidgetDef {
   id: string;
@@ -358,6 +359,13 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
           <Plus size={13} /> Add Widget
         </button>
         <button
+          onClick={() => handleSettingsChange({ ...settings, privacyMode: !settings.privacyMode })}
+          title={settings.privacyMode ? "Privacy mode on — click to show personal info" : "Privacy mode — mask phones, emails and names"}
+          style={{ display: "flex", alignItems: "center", padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", background: settings.privacyMode ? "rgba(88,166,255,0.1)" : "transparent", color: settings.privacyMode ? "var(--accent)" : "var(--text-muted)", cursor: "pointer" }}
+        >
+          {settings.privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+        <button
           onClick={() => setShowSettings(true)}
           title="Settings"
           style={{ display: "flex", alignItems: "center", padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer" }}
@@ -368,7 +376,7 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}>
               <User size={13} />
-              <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userEmail}</span>
+              <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{settings.privacyMode && userEmail ? maskEmails(userEmail) : userEmail}</span>
             </div>
             <a href="/api/auth/signout" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", textDecoration: "none" }}>
               <LogOut size={11} /> Sign out
@@ -383,6 +391,7 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
 
       {/* Grid */}
       <div style={{ padding: "12px 8px" }}>
+        <PrivacyProvider enabled={!!settings.privacyMode}>
         <ResponsiveGrid
           key={activePageId}
           className="layout"
@@ -412,6 +421,7 @@ export default function Dashboard({ initialPages, initialPageId, initialWidgets,
             </WidgetWrapper>
           ))}
         </ResponsiveGrid>
+        </PrivacyProvider>
       </div>
 
       {showAdd && <AddWidgetModal onAdd={addWidget} onClose={() => setShowAdd(false)} />}

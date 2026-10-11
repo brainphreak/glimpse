@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { useWidgetSettings, useWidgetRefresh } from "@/components/WidgetWrapper";
+import { usePrivacy } from "@/lib/privacy";
 
 interface CalEvent {
   id: string;
@@ -25,6 +26,7 @@ function eventStart(e: CalEvent) {
 }
 
 function UpcomingList({ events }: { events: CalEvent[] }) {
+  const privacy = usePrivacy();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", flex: 1, minHeight: 0 }}>
       {events.length === 0 ? (
@@ -38,7 +40,7 @@ function UpcomingList({ events }: { events: CalEvent[] }) {
               style={{ display: "flex", gap: 7, padding: "5px 7px", borderRadius: 7, background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", textDecoration: "none", alignItems: "flex-start", flexShrink: 0 }}>
               <div style={{ width: 3, borderRadius: 2, alignSelf: "stretch", background: color, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.summary || "(No title)"}</div>
+                <div style={{ fontSize: 11, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{privacy.text(e.summary || "") || "(No title)"}</div>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>
                   {start.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
                   {e.start?.dateTime && " · " + start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

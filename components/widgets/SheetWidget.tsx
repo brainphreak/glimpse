@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Table, ExternalLink } from "lucide-react";
 import { useWidgetSettings, useWidgetRefresh } from "@/components/WidgetWrapper";
+import { usePrivacy } from "@/lib/privacy";
 
 // General-purpose Google Sheet reader. Point it at a sheet + tab, map a few columns,
 // and it renders the rows as a list (title / badge / subtitle / time), with an optional filter.
@@ -17,6 +18,7 @@ interface SheetConfig {
   filterValues?: string;   // comma-separated; blank = show all
   maxEntries?: number;     // how many rows to display (after sort); blank = 50
   timeFormat?: "date" | "datetime" | "relative";
+  nameColumn?: string;     // privacy mode shortens this column to "First L."; blank = title column if it looks like a name
 }
 
 const DEFAULT_RANGE = "A:Z";   // all rows of columns A–Z (don't cap rows, or newest appended rows get missed)
@@ -41,6 +43,7 @@ function formatTime(v: string | undefined, fmt: TimeFormat) {
 
 export default function SheetWidget({ config, onConfigChange }: { config: SheetConfig; onConfigChange?: (c: Record<string, unknown>) => void }) {
   const range = config.range || DEFAULT_RANGE;
+  const privacy = usePrivacy();
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [error, setError] = useState("");
@@ -52,7 +55,7 @@ export default function SheetWidget({ config, onConfigChange }: { config: SheetC
   const patch = (p: SheetConfig) => onConfigChange?.({
     sheetUrl: config.sheetUrl, range, titleColumn: config.titleColumn, badgeColumn: config.badgeColumn,
     subtitleColumn: config.subtitleColumn, timeColumn: config.timeColumn, filterColumn: config.filterColumn,
-    filterValues: config.filterValues, maxEntries: config.maxEntries, timeFormat: config.timeFormat, ...p,
+    filterValues: config.filterValues, maxEntries: config.maxEntries, timeFormat: config.timeFormat, nameColumn: config.nameColumn, ...p,
   });
 
   const load = useCallback(() => {
@@ -75,6 +78,9 @@ export default function SheetWidget({ config, onConfigChange }: { config: SheetC
   const subKey = key(config.subtitleColumn);
   const timeKey = key(config.timeColumn);
   const filterKey = key(config.filterColumn);
+  // Column treated as a person's name in privacy mode (others only get phone/email masking).
+  const nameKey = config.nameColumn ? key(config.nameColumn) : (/name|caller|contact|from|sender|customer/i.test(titleKey) ? titleKey : "");
+  const show = (k: string, v: string) => (k && k === nameKey ? privacy.name(v) : privacy.text(v));
   const filterSet = new Set((config.filterValues || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 
   let items = rows.filter((r) => {
@@ -107,6 +113,7 @@ export default function SheetWidget({ config, onConfigChange }: { config: SheetC
       {field("Subtitle column (optional)", "subtitleColumn", "e.g. Summary / message_content")}
       {field("Time column (optional, sorts newest first)", "timeColumn", "e.g. Timestamp / received_at")}
       {field("Filter column (optional)", "filterColumn", "e.g. Status")}
+      {field("Name column — privacy mode shortens it to “First L.” (blank = title if it's a name column)", "nameColumn", "e.g. Caller Name")}
       {field("Filter values — show only these (comma; blank = all)", "filterValues", "open, new, in progress")}
       <div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Max entries to show</div>
@@ -141,13 +148,13 @@ export default function SheetWidget({ config, onConfigChange }: { config: SheetC
         {shown.map((r, i) => (
           <div key={i} style={{ padding: "7px 9px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{r[titleKey] || "(untitled)"}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{show(titleKey, r[titleKey] || "") || "(untitled)"}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                {badgeKey && r[badgeKey] && <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 10, background: "rgba(88,166,255,0.15)", color: "var(--accent)", whiteSpace: "nowrap" }}>{r[badgeKey]}</span>}
+                {badgeKey && r[badgeKey] && <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 10, background: "rgba(88,166,255,0.15)", color: "var(--accent)", whiteSpace: "nowrap" }}>{show(badgeKey, r[badgeKey])}</span>}
                 {timeKey && r[timeKey] && <span style={{ fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{formatTime(r[timeKey], timeFormat)}</span>}
               </div>
             </div>
-            {subKey && r[subKey] && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{r[subKey]}</div>}
+            {subKey && r[subKey] && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{show(subKey, r[subKey])}</div>}
           </div>
         ))}
       </div>

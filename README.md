@@ -16,6 +16,7 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 - **20+ widgets** — clock, weather, calendar, Gmail, notes, links, news (image cards), RSS, Reddit, stocks, crypto, GitHub, Docker, system health, world clocks, server monitor, read-later, terminal, custom HTML/image/iframe
 - **In-browser setup** — API keys, OAuth, and integrations are configured from **Settings → Setup**; stored in SQLite, no restart needed
 - **Themes** — Default, Light, Matrix, Neon, Retro, Gameboy, Midnight, Dracula + full per-colour customisation
+- **Privacy mode** — one click (eye button) masks phone numbers, emails (`jXXXXXy@gmail.com`) and last names (`Jackie F.`) across widgets, for screen sharing
 - **Persistent terminal** — a real cross-platform shell (bash/zsh/PowerShell) over WebSocket, plus the `claude` CLI; sessions survive disconnects and **auto-reconnect**
 - **Backup** — export/import all pages, widgets, notes, links, and servers as JSON
 - **Always-on** — `restart: unless-stopped`; survives reboots

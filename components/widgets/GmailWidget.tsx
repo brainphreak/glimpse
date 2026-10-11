@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Mail, MailOpen, ExternalLink } from "lucide-react";
 import { useWidgetRefresh } from "@/components/WidgetWrapper";
+import { usePrivacy } from "@/lib/privacy";
 
 interface GmailMessage {
   id: string;
@@ -19,6 +20,7 @@ function parseFrom(from: string) {
 }
 
 export default function GmailWidget({ loggedIn }: { loggedIn: boolean }) {
+  const privacy = usePrivacy();
   const [messages, setMessages] = useState<GmailMessage[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -69,17 +71,17 @@ export default function GmailWidget({ loggedIn }: { loggedIn: boolean }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ fontSize: 11, fontWeight: msg.unread ? 600 : 400, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {parseFrom(msg.from)}
+                  {privacy.name(parseFrom(msg.from))}
                 </span>
                 <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
                   {new Date(msg.date).toLocaleDateString([], { month: "short", day: "numeric" })}
                 </span>
               </div>
               <div style={{ fontSize: 11, color: msg.unread ? "var(--text-primary)" : "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                {msg.subject || "(No subject)"}{msg.count && msg.count > 1 ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({msg.count})</span> : null}
+                {privacy.text(msg.subject) || "(No subject)"}{msg.count && msg.count > 1 ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({msg.count})</span> : null}
               </div>
               <div style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                {msg.snippet}
+                {privacy.text(msg.snippet)}
               </div>
             </div>
           </div>

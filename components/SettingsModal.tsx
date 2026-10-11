@@ -25,6 +25,7 @@ export interface DashboardSettings {
   showDashboardName: boolean;
   theme: string;
   customTheme?: Partial<ThemeVars>;
+  privacyMode?: boolean;
 }
 
 export const THEMES: { id: string; name: string; vars: ThemeVars }[] = [
@@ -596,6 +597,7 @@ export default function SettingsModal({ settings, onChange, onClose }: Props) {
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Shown to the left of the tabs in the top bar.</div>
               </div>
               <Toggle label="Show title" desc="Display the title/company name in the top bar." checked={settings.showDashboardName ?? true} onChange={(v) => update({ showDashboardName: v })} />
+              <Toggle label="Privacy mode" desc="Mask phone numbers as (XXX) XXX-XXXX, emails as jXXXXXy@gmail.com, and shorten names (Jackie Friday → Jackie F.) in widgets. Display only — for screen sharing. Also toggled by the eye button in the top bar." checked={!!settings.privacyMode} onChange={(v) => update({ privacyMode: v })} />
 
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginTop: 16, marginBottom: 0 }}>Layout</div>
               <Toggle label="Show widget headers" desc="Always show title bar. When off, headers appear on click only." checked={settings.showWidgetHeaders} onChange={(v) => update({ showWidgetHeaders: v })} />

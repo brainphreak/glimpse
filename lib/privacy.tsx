@@ -76,6 +76,16 @@ export function maskName(s: string): string {
   return masked;
 }
 
+// Titles like "Service Call - Jackie Friday": the part after the last dash is treated as a
+// name whatever the first name is (and remembered, so briefings mentioning them are masked too).
+const TRAILING_NAME_RE = /^(.*\S)(\s+[-–—:]\s+)([\p{L}][\p{L}'’.-]*(?:\s+[\p{L}][\p{L}'’.-]*){1,3})\s*$/u;
+
+export function maskTitle(s: string): string {
+  const m = s.match(TRAILING_NAME_RE);
+  if (m) return `${maskText(m[1])}${m[2]}${maskName(m[3])}`;
+  return maskText(s);
+}
+
 const PrivacyCtx = createContext(false);
 
 export function PrivacyProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
@@ -90,5 +100,6 @@ export function usePrivacy() {
     on,
     text: on ? maskText : id,
     name: on ? maskName : id,
+    title: on ? maskTitle : id,
   };
 }

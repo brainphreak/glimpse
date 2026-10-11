@@ -7,6 +7,7 @@ const WIDGET_TYPES = [
   { type: "weather",        label: "Weather",        desc: "Current weather and forecast" },
   { type: "calendar",       label: "Calendar",       desc: "Google Calendar events" },
   { type: "gmail",          label: "Gmail",          desc: "Recent emails and unread count" },
+  { type: "sheet",          label: "Google Sheet",   desc: "Show rows from any Google Sheet (tickets, voice log, etc.)" },
   { type: "notes",          label: "Notes",          desc: "Sticky notes pinboard" },
   { type: "links",          label: "Links",          desc: "Bookmarks and quick links" },
   { type: "rss",            label: "RSS Feed",       desc: "Any RSS or Atom feed" },

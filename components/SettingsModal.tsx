@@ -183,6 +183,105 @@ function PlainField({ label, desc, value, onSave, placeholder }: { label: string
   );
 }
 
+// Claude CLI login: runs `claude setup-token` on the server, you approve on claude.ai and
+// paste the code back; the ~1-year token is saved and used by the Claude (subscription) models.
+function ClaudeLogin() {
+  type Status = { tokenSet: boolean; savedAt: string | null; expiresAt: string | null; credsExpiresAt: number | null };
+  const [status, setStatus] = useState<Status | null>(null);
+  const [url, setUrl] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [manual, setManual] = useState(false);
+  const [token, setToken] = useState("");
+
+  const refresh = () => fetch("/api/claude/auth").then(r => r.json()).then(setStatus).catch(() => {});
+  useEffect(() => { refresh(); }, []);
+
+  const call = async (action: string, extra: Record<string, string> = {}) => {
+    const r = await fetch("/api/claude/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
+    return r.json();
+  };
+
+  const start = async () => {
+    setBusy("start"); setMsg(null); setUrl(""); setCode("");
+    const j = await call("start").catch(e => ({ error: String(e) }));
+    setBusy("");
+    if (j.url) { setUrl(j.url); window.open(j.url, "_blank", "noopener"); }
+    else setMsg({ ok: false, text: j.error || "Failed to start" });
+  };
+  const finish = async () => {
+    setBusy("finish"); setMsg(null);
+    const j = await call("finish", { code }).catch(e => ({ error: String(e) }));
+    setBusy("");
+    if (j.ok) { setUrl(""); setCode(""); setMsg({ ok: true, text: "Logged in — token saved and working." }); }
+    else setMsg({ ok: false, text: j.error || "Failed" });
+    refresh();
+  };
+  const test = async () => {
+    setBusy("test"); setMsg(null);
+    const j = await call("test").catch(e => ({ ok: false, error: String(e) }));
+    setBusy("");
+    setMsg(j.ok ? { ok: true, text: `Working — Claude replied "${j.reply}"` } : { ok: false, text: j.error || "Failed" });
+  };
+  const saveManual = async () => {
+    setBusy("save"); setMsg(null);
+    const j = await call("save", { token }).catch(e => ({ error: String(e) }));
+    setBusy("");
+    if (j.ok) { setManual(false); setToken(""); setMsg({ ok: true, text: "Token saved and working." }); }
+    else setMsg({ ok: false, text: j.error || "Failed" });
+    refresh();
+  };
+  const cancel = async () => { await call("cancel").catch(() => {}); setUrl(""); setCode(""); };
+
+  const days = status?.expiresAt ? Math.floor((new Date(status.expiresAt).getTime() - Date.now()) / 86400000) : null;
+  const btn = (primary: boolean, disabled = false): React.CSSProperties => ({ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: primary ? "none" : "1px solid var(--border)", background: primary ? (disabled ? "var(--border)" : "var(--accent)") : "transparent", color: primary ? "#fff" : "var(--text-secondary)", cursor: disabled ? "default" : "pointer" });
+
+  return (
+    <div style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500, marginBottom: 4 }}>Claude login (subscription)</div>
+      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6, lineHeight: 1.5 }}>
+        Signs the server&apos;s <code>claude</code> CLI in with your Claude plan using a token that lasts about a year.
+        {status && (status.tokenSet
+          ? <> <span style={{ color: days !== null && days < 30 ? "var(--danger)" : "var(--success)" }}>✓ Token saved{status.savedAt ? ` ${new Date(status.savedAt).toLocaleDateString()}` : ""}{days !== null ? ` — about ${days} days left` : ""}.</span></>
+          : <> <span style={{ color: "var(--text-secondary)" }}>No token saved — using the server&apos;s auto-refreshing login{status.credsExpiresAt ? ` (access token ${status.credsExpiresAt < Date.now() ? "expired" : "valid until"} ${new Date(status.credsExpiresAt).toLocaleString()})` : ""}.</span></>)}
+      </div>
+
+      {!url ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={start} disabled={!!busy} style={btn(true, !!busy)}>{busy === "start" ? "Starting…" : status?.tokenSet ? "Log in again" : "Log in"}</button>
+          <button onClick={test} disabled={!!busy} style={btn(false)}>{busy === "test" ? "Testing…" : "Test"}</button>
+          <button onClick={() => setManual(!manual)} disabled={!!busy} style={btn(false)}>Paste token</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            1. Approve on claude.ai (<a href={url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>open the login page</a> if it didn&apos;t open).<br />
+            2. Paste the code it shows you here:
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && code && finish()} placeholder="Paste code…" autoFocus
+              style={{ flex: 1, minWidth: 0, background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 8px", color: "var(--text-primary)", fontSize: 12, outline: "none" }} />
+            <button onClick={finish} disabled={!code || !!busy} style={btn(true, !code || !!busy)}>{busy === "finish" ? "Saving…" : "Finish"}</button>
+            <button onClick={cancel} disabled={!!busy} style={btn(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {manual && !url && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>Run <code>claude setup-token</code> on any computer and paste the <code>sk-ant-oat01-…</code> token it prints:</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} onKeyDown={(e) => e.key === "Enter" && token && saveManual()} placeholder="sk-ant-oat01-…"
+              style={{ flex: 1, minWidth: 0, background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 8px", color: "var(--text-primary)", fontSize: 12, outline: "none" }} />
+            <button onClick={saveManual} disabled={!token || !!busy} style={btn(true, !token || !!busy)}>{busy === "save" ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ fontSize: 10, marginTop: 6, color: msg.ok ? "var(--success)" : "var(--danger)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.text}</div>}
+    </div>
+  );
+}
+
 function SetupTab() {
   const [cfg, setCfg] = useState<Record<string, string | boolean>>({});
   const [saved, setSaved] = useState<string | null>(null);
@@ -278,6 +377,7 @@ function SetupTab() {
           />
 
           {sectionHead("AI widgets", "Power the Claude chat, Daily Briefing, Feed Digest, and AI Terminal widgets")}
+          <ClaudeLogin />
           <SecretField
             label="Anthropic API Key"
             desc="From console.anthropic.com — enables Claude models"

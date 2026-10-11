@@ -50,6 +50,7 @@ export function useWidgetRefresh(fn: () => void) {
 
 const DEFAULT_TITLES: Record<string, string> = {
   clock: "Clock", weather: "Weather", calendar: "Calendar", gmail: "Gmail",
+  sheet: "Google Sheet",
   notes: "Notes", links: "Links", rss: "RSS Feed", reddit: "Reddit",
   "server-monitor": "Server Monitor", claude: "AI Chat", terminal: "Terminal",
   "daily-briefing": "Daily Briefing", "feed-digest": "Feed Digest", "ai-terminal": "AI Terminal",

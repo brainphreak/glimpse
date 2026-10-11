@@ -10,6 +10,7 @@ interface GmailMessage {
   date: string;
   unread: boolean;
   snippet: string;
+  count?: number;   // messages in the thread
 }
 
 function parseFrom(from: string) {
@@ -75,7 +76,7 @@ export default function GmailWidget({ loggedIn }: { loggedIn: boolean }) {
                 </span>
               </div>
               <div style={{ fontSize: 11, color: msg.unread ? "var(--text-primary)" : "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                {msg.subject || "(No subject)"}
+                {msg.subject || "(No subject)"}{msg.count && msg.count > 1 ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({msg.count})</span> : null}
               </div>
               <div style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
                 {msg.snippet}

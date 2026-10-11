@@ -12,7 +12,9 @@ RUN npm run build
 # Production stage
 FROM base AS runner
 RUN apk add --no-cache python3 make g++ bash tmux
-RUN npm install -g @anthropic-ai/claude-code
+# Pinned so the layer cache doesn't keep an old CLI forever; bump to upgrade.
+ARG CLAUDE_CODE_VERSION=2.1.296
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 # tmux config: no status bar, correct terminal type for Claude's TUI
 RUN printf 'set -g status off\nset -g default-terminal "xterm-256color"\nset -ga terminal-overrides ",xterm-256color:Tc"\n' > /root/.tmux.conf
 WORKDIR /app

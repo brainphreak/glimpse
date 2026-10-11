@@ -24,7 +24,13 @@ export async function GET() {
     let widgets: StoredWidget[] = [];
     try { widgets = JSON.parse(r.widgets); } catch { continue; }
     for (const w of widgets) {
-      if (w.type === "rss" && w.config?.url) rss.push({ url: w.config.url, title: w.config.title || hostOf(w.config.url) });
+      if (w.type === "rss" && w.config?.url) {
+        // Many RSS widgets keep the generic default title "RSS Feed" — fall back to the
+        // domain so each feed is distinguishable in pickers (e.g. the Feed Digest checkboxes).
+        const t = (w.config.title || "").trim();
+        const label = t && t.toLowerCase() !== "rss feed" ? t : hostOf(w.config.url);
+        rss.push({ url: w.config.url, title: label });
+      }
       if (w.type === "news" && Array.isArray(w.config?.feeds)) {
         for (const u of w.config.feeds) if (u) news.push({ url: u, title: hostOf(u) });
       }

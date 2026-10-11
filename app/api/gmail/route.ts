@@ -14,8 +14,9 @@ export async function GET() {
     oauth2.setCredentials({ access_token: session.accessToken });
     const gmail = google.gmail({ version: "v1", auth: oauth2 });
 
+    // One entry per conversation: list inbox threads, then summarize each by its latest message.
     const [listRes, profileRes] = await Promise.all([
-      gmail.users.messages.list({
+      gmail.users.threads.list({
         userId: "me",
         maxResults: 15,
         labelIds: ["INBOX"],
@@ -24,23 +25,25 @@ export async function GET() {
     ]);
 
     const messages = await Promise.all(
-      (listRes.data.messages || []).map(async (msg) => {
-        const detail = await gmail.users.messages.get({
+      (listRes.data.threads || []).map(async (t) => {
+        const detail = await gmail.users.threads.get({
           userId: "me",
-          id: msg.id!,
+          id: t.id!,
           format: "metadata",
           metadataHeaders: ["Subject", "From", "Date"],
         });
-        const headers = detail.data.payload?.headers || [];
-        const get = (name: string) =>
-          headers.find((h) => h.name === name)?.value || "";
+        const msgs = detail.data.messages || [];
+        const latest = msgs[msgs.length - 1];
+        const get = (m: typeof latest | undefined, name: string) =>
+          m?.payload?.headers?.find((h) => h.name === name)?.value || "";
         return {
-          id: msg.id,
-          subject: get("Subject"),
-          from: get("From"),
-          date: get("Date"),
-          unread: detail.data.labelIds?.includes("UNREAD") ?? false,
-          snippet: detail.data.snippet || "",
+          id: t.id,
+          subject: get(msgs[0], "Subject") || get(latest, "Subject"),
+          from: get(latest, "From"),
+          date: get(latest, "Date"),
+          unread: msgs.some((m) => m.labelIds?.includes("UNREAD")),
+          snippet: latest?.snippet || t.snippet || "",
+          count: msgs.length,
         };
       })
     );

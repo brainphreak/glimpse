@@ -13,6 +13,7 @@ import ClockWidget from "./widgets/ClockWidget";
 import WeatherWidget from "./widgets/WeatherWidget";
 import CalendarWidget from "./widgets/CalendarWidget";
 import GmailWidget from "./widgets/GmailWidget";
+import SheetWidget from "./widgets/SheetWidget";
 import NotesWidget from "./widgets/NotesWidget";
 import LinksWidget from "./widgets/LinksWidget";
 import RSSWidget from "./widgets/RSSWidget";
@@ -64,6 +65,7 @@ const DEFAULT_SIZES: Record<string, { w: number; h: number; minW: number; minH: 
   weather:          { w: 3, h: 4,  minW: 1, minH: 1 },
   calendar:         { w: 5, h: 8,  minW: 1, minH: 1 },
   gmail:            { w: 4, h: 7,  minW: 1, minH: 1 },
+  sheet:            { w: 5, h: 7,  minW: 1, minH: 1 },
   notes:            { w: 6, h: 6,  minW: 1, minH: 1 },
   links:            { w: 5, h: 5,  minW: 1, minH: 1 },
   rss:              { w: 4, h: 7,  minW: 1, minH: 1 },
@@ -109,6 +111,7 @@ function renderWidget(
     case "weather":        return <WeatherWidget config={widget.config as { city?: string; unit?: "C" | "F" }} onConfigChange={update} />;
     case "calendar":       return <CalendarWidget loggedIn={loggedIn} config={widget.config as { view?: string }} onConfigChange={update} />;
     case "gmail":          return <GmailWidget loggedIn={loggedIn} />;
+    case "sheet":          return <SheetWidget config={widget.config as { sheetUrl?: string; range?: string; titleColumn?: string; badgeColumn?: string; subtitleColumn?: string; timeColumn?: string; filterColumn?: string; filterValues?: string }} onConfigChange={update} />;
     case "notes":          return <NotesWidget />;
     case "links":          return <LinksWidget config={widget.config as { align?: "flex-start" | "center" | "flex-end" }} onConfigChange={update} />;
     case "rss":            return <RSSWidget config={widget.config as { url?: string; title?: string }} onConfigChange={update} />;

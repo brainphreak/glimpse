@@ -4,13 +4,14 @@ import { execFile, spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-
-const CLI = process.env.CLAUDE_CLI || "claude";
+import { getConfig } from "@/lib/config";
+import { CLI, cliEnv } from "@/lib/claude-cli";
 
 interface InMessage { role: "user" | "assistant"; content: string }
 
-// Is the `claude` CLI authenticated? Check for its stored credentials file.
+// Is the `claude` CLI authenticated? Check for a saved token or its stored credentials file.
 function isLoggedIn(): boolean {
+  if (getConfig("claude_oauth_token")) return true;
   const paths = [
     path.join(os.homedir(), ".claude", ".credentials.json"),
     "/root/.claude/.credentials.json",
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     start(controller) {
       // Run in /tmp so the CLI doesn't scan the app directory.
-      const child = spawn(CLI, args, { cwd: "/tmp", env: process.env });
+      const child = spawn(CLI, args, { cwd: "/tmp", env: cliEnv(), stdio: ["ignore", "pipe", "pipe"] });
       let stderr = "";
       let closed = false;
       const finish = (obj?: unknown) => {
@@ -66,7 +67,11 @@ export async function POST(req: Request) {
       child.on("close", (code) => {
         clearTimeout(timer);
         if (code === 0) finish();
-        else finish({ t: "error", v: stderr.trim() || `claude CLI exited with code ${code}` });
+        else {
+          const msg = stderr.trim() || `claude CLI exited with code ${code}`;
+          const hint = /oauth|authenticat|log ?in|credential/i.test(msg) ? " — re-login under Settings → Setup → Claude login." : "";
+          finish({ t: "error", v: msg + hint });
+        }
       });
     },
   });

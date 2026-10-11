@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Power, PowerOff, Maximize2, Minimize2, RotateCcw } from "lucide-react";
+import { Power, PowerOff, Maximize2, Minimize2, RotateCcw, MousePointer2, MousePointerClick } from "lucide-react";
+
+type MouseMode = "select" | "app";
 
 const PRESETS = [
   { label: "Claude", cmd: "claude" },
   { label: "Bash", cmd: "bash" },
 ];
 
-export default function TerminalWidget({ config, onConfigChange }: { config: { cmd?: string; fullscreen?: boolean }; onConfigChange?: (c: Record<string, unknown>) => void }) {
+export default function TerminalWidget({ config, onConfigChange }: { config: { cmd?: string; fullscreen?: boolean; mouseMode?: MouseMode }; onConfigChange?: (c: Record<string, unknown>) => void }) {
   const termRef = useRef<HTMLDivElement>(null);
   const termInstance = useRef<unknown>(null);
   const fitAddon = useRef<unknown>(null);
@@ -18,6 +20,11 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
   const [connected, setConnected] = useState(false);
   const [cmd, setCmd] = useState(config.cmd || "claude");
   const [fullscreen, setFullscreen] = useState(config.fullscreen ?? false);
+  // "select": mouse reporting disabled → drag selects/copies text (but the app can't scroll).
+  // "app":    mouse reporting on → the app (e.g. Claude) gets wheel/scroll; hold Shift to select text.
+  const [mouseMode, setMouseMode] = useState<MouseMode>(config.mouseMode || "select");
+  const mouseModeRef = useRef<MouseMode>(mouseMode);
+  mouseModeRef.current = mouseMode;
 
   const toggleFullscreen = () => {
     setFullscreen((f) => {
@@ -79,14 +86,17 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
     termInstance.current = term;
     fitAddon.current = fit;
 
-    // Disable the application's mouse-capture (DECSET 1000–1016) so click-drag does
-    // local text selection instead of being sent to the TUI. This lets you highlight
-    // and copy code/commands out of Claude. Bracketed-paste / alt-screen are untouched.
-    const MOUSE_MODES = new Set([1000, 1001, 1002, 1003, 1005, 1006, 1015, 1016]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isMouse = (params: any[]) => params.some((p) => MOUSE_MODES.has(Array.isArray(p) ? p[0] : p));
-    term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => isMouse(params));
-    term.parser.registerCsiHandler({ prefix: "?", final: "l" }, (params) => isMouse(params));
+    // In "select" mode, swallow the application's mouse-capture (DECSET 1000–1016) so click-drag
+    // does local text selection instead of being sent to the TUI. In "app" mode we leave mouse
+    // reporting intact so the running program (e.g. Claude) receives wheel/scroll events — hold
+    // Shift to select text. Bracketed-paste / alt-screen are untouched in both modes.
+    if (mouseModeRef.current === "select") {
+      const MOUSE_MODES = new Set([1000, 1001, 1002, 1003, 1005, 1006, 1015, 1016]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isMouse = (params: any[]) => params.some((p) => MOUSE_MODES.has(Array.isArray(p) ? p[0] : p));
+      term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => isMouse(params));
+      term.parser.registerCsiHandler({ prefix: "?", final: "l" }, (params) => isMouse(params));
+    }
 
     // Selecting text immediately copies it to the clipboard (like a native terminal).
     term.onSelectionChange(() => {
@@ -186,7 +196,7 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
         <div style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? "var(--success)" : "var(--danger)", flexShrink: 0 }} />
         <div style={{ display: "flex", gap: 4 }}>
           {PRESETS.map((p) => (
-            <button key={p.cmd} onClick={() => { setCmd(p.cmd); connect(p.cmd); }} style={{
+            <button key={p.cmd} onClick={() => { setCmd(p.cmd); onConfigChange?.({ ...config, cmd: p.cmd }); connect(p.cmd); }} style={{
               fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "1px solid var(--border)",
               background: cmd === p.cmd ? "var(--accent)" : "transparent",
               color: cmd === p.cmd ? "#fff" : "var(--text-muted)", cursor: "pointer",
@@ -196,6 +206,21 @@ export default function TerminalWidget({ config, onConfigChange }: { config: { c
           ))}
         </div>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={() => {
+            const next: MouseMode = mouseMode === "select" ? "app" : "select";
+            setMouseMode(next);
+            mouseModeRef.current = next;
+            onConfigChange?.({ ...config, mouseMode: next });
+            connect(cmd);
+          }}
+          title={mouseMode === "select"
+            ? "Mouse: text-select mode (drag to copy). Click for app-scroll mode (lets Claude scroll)."
+            : "Mouse: app-scroll mode (wheel scrolls Claude; hold Shift to select). Click for text-select mode."}
+          style={{ background: "none", border: "none", color: mouseMode === "app" ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", padding: 2, display: "flex", alignItems: "center" }}
+        >
+          {mouseMode === "select" ? <MousePointer2 size={13} /> : <MousePointerClick size={13} />}
+        </button>
         <button
           onClick={() => newSession(cmd)}
           title="Kill session and start fresh"

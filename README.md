@@ -34,7 +34,8 @@ Built with Next.js 16, React, SQLite, and `react-grid-layout`. Runs identically 
 | **World Clocks** | Time across multiple time zones |
 | **Weather** | Current weather + forecast; no key (wttr.in) or OpenWeatherMap; °C/°F |
 | **Calendar** | Google Calendar events (requires sign-in) |
-| **Gmail** | Recent emails + unread count (requires sign-in) |
+| **Gmail** | Recent conversations (one entry per thread, with message count) + unread count (requires sign-in) |
+| **Google Sheet** | Rows from any Google Sheet as a list — map title/badge/subtitle/time columns, filter by a column, newest first (public sheets, or private via sign-in) |
 | **Notes** | Rich-text sticky notes with a pop-out editor |
 | **Links** | Bookmark bar with categories and alignment |
 | **Read Later** | Quick-save links to read later (per browser) |
@@ -115,7 +116,7 @@ Glimpse's AI widgets work with any of three providers; each AI widget has a mode
 | Provider | Cost | Setup |
 |---|---|---|
 | **Claude (API)** | Paid per token | Add `ANTHROPIC_API_KEY` in Settings → Setup (or `.env.local`) |
-| **Claude (subscription / CLI)** | Uses your Claude plan, no API bill | The `claude` CLI ships in the image. Open a **Terminal** widget, run `claude`, and `/login`. (To enable it in a container, mount your Claude creds — see the `docker-compose.yml` comment.) |
+| **Claude (subscription / CLI)** | Uses your Claude plan, no API bill | The `claude` CLI ships in the image. Go to **Settings → Setup → Claude login**, click **Log in**, approve on claude.ai and paste the code back — this saves a long-lived (~1 year) token and **Test** checks it. Or run `claude setup-token` anywhere and use **Paste token**. |
 | **Ollama (local)** | Free / local | Run Ollama, set its URL in Settings → Setup |
 
 ### Ollama notes
@@ -152,7 +153,7 @@ Most settings live in **Settings → Setup** (stored in SQLite, applied immediat
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → create an **OAuth 2.0 Client ID** (Web application)
 2. Add the redirect URI shown in **Settings → Setup**: `<NEXTAUTH_URL>/api/auth/callback/google`
-3. Enable the **Gmail API** and **Google Calendar API**
+3. Enable the **Gmail API**, **Google Calendar API**, and (for the Google Sheet widget) the **Google Sheets API**
 4. Paste the Client ID & Secret into **Settings → Setup** (or set the env vars)
 
 > `NEXTAUTH_URL` and the redirect URI must match the host you actually open. For LAN access add `http://<lan-ip>:3000/api/auth/callback/google` too.

@@ -18,6 +18,7 @@ const ENV_MAP: Record<string, string> = {
   terminal_user:          "TERMINAL_USER",
   terminal_host:          "TERMINAL_HOST",
   terminal_home:          "TERMINAL_HOME",
+  claude_oauth_token:     "CLAUDE_CODE_OAUTH_TOKEN",
 };
 
 // Secret keys whose values are masked in the GET /api/config response
@@ -29,6 +30,7 @@ export const SECRET_KEYS = new Set([
   "github_token",
   "reddit_client_secret",
   "n8n_api_key",
+  "claude_oauth_token",
 ]);
 
 export function getConfig(key: string): string {

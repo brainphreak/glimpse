@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useWidgetSettings, useWidgetRefresh } from "@/components/WidgetWrapper";
+import { usePrivacy } from "@/lib/privacy";
 import {
   discoverModels, DEFAULT_CLAUDE_MODEL,
   streamChat, type ModelOption,
@@ -30,6 +31,7 @@ export default function DailyBriefingWidget({ config, onConfigChange }: { config
   const [models, setModels] = useState<ModelOption[]>([]);
   const [model, setModel] = useState(config.model || DEFAULT_CLAUDE_MODEL);
   const [text, setText] = useState(config.lastText || "");
+  const privacy = usePrivacy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [generatedAt, setGeneratedAt] = useState<Date | null>(config.lastAt ? new Date(config.lastAt) : null);
@@ -159,7 +161,7 @@ export default function DailyBriefingWidget({ config, onConfigChange }: { config
       {(text || loading) && (
         <>
           <div style={{ flex: 1, overflow: "auto", fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {text}
+            {privacy.text(text)}
             {loading && <span style={{ opacity: 0.5 }}>▋</span>}
           </div>
           {error && <div style={{ fontSize: 11, color: "var(--danger)" }}>{error}</div>}
